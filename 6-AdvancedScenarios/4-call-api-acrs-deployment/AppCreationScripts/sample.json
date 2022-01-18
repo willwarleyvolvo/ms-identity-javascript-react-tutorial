@@ -27,6 +27,9 @@
             ],
             "ManualSteps": [
                 {
+                    "Comment": "Navigate to the Manifest and set 'accessTokenAcceptedVersion' to '2' instead of 'null'"
+                },
+                {
                     "Comment": "Navigate to the API Permissions page and select 'Grant admin consent for (your tenant)"
                 },
                 {
