@@ -1,9 +1,9 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$True, HelpMessage='Tenant ID (This is a GUID which represents the "Directory ID" of the AzureAD tenant into which you want to create the apps')]
+    [Parameter(Mandatory=$False, HelpMessage='Tenant ID (This is a GUID which represents the "Directory ID" of the AzureAD tenant into which you want to create the apps')]
     [string] $tenantId,
-    [Parameter(Mandatory=$False, HelpMessage='Azure environment to use while running the script (it defaults to AzureCloud)')]
+    [Parameter(Mandatory=$False, HelpMessage='Azure environment to use while running the script. Default = Global')]
     [string] $azureEnvironmentName
 )
 
@@ -11,26 +11,10 @@ param(
  This script creates the Azure AD applications needed for this sample and updates the configuration files
  for the visual Studio projects from the data in the Azure AD applications.
 
- Before running this script you need to install the Graph cmdlets as an administrator. 
- For this:
- 1) Run Powershell as an administrator
- 2) in the PowerShell window, type: Install-Module Microsoft.Graph.Applications
-
+ In case you don't have Microsoft.Graph.Applications already installed, the script will automatically install it for the current user
+ 
  There are four ways to run this script. For more information, read the AppCreationScripts.md file in the same folder as this script.
 #>
-
-#OBSOLETE after migration to Graph API
-# Create a password that can be used as an application key
-Function ComputePassword
-{
-    $aesManaged = New-Object "System.Security.Cryptography.AesManaged"
-    $aesManaged.Mode = [System.Security.Cryptography.CipherMode]::CBC
-    $aesManaged.Padding = [System.Security.Cryptography.PaddingMode]::Zeros
-    $aesManaged.BlockSize = 128
-    $aesManaged.KeySize = 256
-    $aesManaged.GenerateKey()
-    return [System.Convert]::ToBase64String($aesManaged.Key)
-}
 
 # Create an application key
 # See https://www.sabin.io/blog/adding-an-azure-active-directory-application-and-key-using-powershell/
@@ -158,7 +142,7 @@ Function CreateAppRole([string] $types, [string] $name, [string] $description)
     $typesArr = $types.Split(',')
     foreach($type in $typesArr)
     {
-        $appRole.AllowedMemberTypes.Add($type);
+        $appRole.AllowedMemberTypes += $type;
     }
     $appRole.DisplayName = $name
     $appRole.Id = New-Guid
@@ -168,18 +152,6 @@ Function CreateAppRole([string] $types, [string] $name, [string] $description)
     return $appRole
 }
 
-# Pre-requisites
-if ($null -eq (Get-Module -ListAvailable -Name "Microsoft.Graph.Applications")) {
-    Install-Module "Microsoft.Graph.Applications" -Scope CurrentUser 
-}
-
-Import-Module Microsoft.Graph.Applications
-
-Set-Content -Value "<html><body><table>" -Path createdApps.html
-Add-Content -Value "<thead><tr><th>Application</th><th>AppId</th><th>Url in the Azure portal</th></tr></thead><tbody>" -Path createdApps.html
-
-$ErrorActionPreference = "Stop"
-
 Function ConfigureApplications
 {
     <#.Description
@@ -187,16 +159,22 @@ Function ConfigureApplications
        configuration files in the client and service project  of the visual studio solution (App.Config and Web.Config)
        so that they are consistent with the Applications parameters
     #> 
-
-    # Connect to the Microsoft Graph API, non-interactive is not supported for the moment (Oct 2021)
+    
     if (!$azureEnvironmentName)
     {
         $azureEnvironmentName = "Global"
     }
 
+    # Connect to the Microsoft Graph API, non-interactive is not supported for the moment (Oct 2021)
     Write-Host "Connecting Microsoft Graph"
-    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -Environment $azureEnvironmentName
-
+    if ($tenantId -eq "") {
+        Connect-MgGraph -Scopes "Application.ReadWrite.All" -Environment $azureEnvironmentName
+        $tenantId = (Get-MgContext).TenantId
+    }
+    else {
+        Connect-MgGraph -TenantId $tenantId -Scopes "Application.ReadWrite.All" -Environment $azureEnvironmentName
+    }
+    
 
    # Create the service AAD application
    Write-Host "Creating the AAD application (msal-node-api-acrs)"
@@ -216,7 +194,7 @@ Function ConfigureApplications
  
                                                          } `
                                                        -SignInAudience AzureADMyOrg `
-                                                       #-PublicClient $False
+                                                       #end of command
     #add password to the application
     $pwdCredential = Add-MgApplicationPassword -ApplicationId $serviceAadApplication.Id -PasswordCredential $key
     $serviceAppKey = $pwdCredential.SecretText
@@ -236,32 +214,27 @@ Function ConfigureApplications
     }
     
     # rename the user_impersonation scope if it exists to match the readme steps or add a new scope
-    $scopes = New-Object System.Collections.Generic.List[Microsoft.Graph.PowerShell.Models.MicrosoftGraphPermissionScope]
-   
+       
     # delete default scope i.e. User_impersonation
     $scope = $serviceAadApplication.Api.Oauth2PermissionScopes | Where-Object { $_.Value -eq "User_impersonation" }
     if($scope -ne $null)
     {
         # disable the scope
         $scope.IsEnabled = $false
-        Update-MgApplication -ApplicationId $serviceAadApplication.Id -Api @{Oauth2PermissionScopes = $scopes}
+        Update-MgApplication -ApplicationId $serviceAadApplication.Id -Api @{Oauth2PermissionScopes = $($scope)}
 
         # clear the scope
-        $scopes.Clear()
-        Update-MgApplication -ApplicationId $serviceAadApplication.Id -Api @{Oauth2PermissionScopes = $scopes}
+        Update-MgApplication -ApplicationId $serviceAadApplication.Id -Api @{Oauth2PermissionScopes = $()}
     }
-    if ($scopes.Count -ge 0) 
-    {
-        $scope = CreateScope -value access_as_user  `
-        -userConsentDisplayName "Access msal-node-api-acrs"  `
-        -userConsentDescription "Allow the application to access msal-node-api-acrs on your behalf."  `
-        -adminConsentDisplayName "Access msal-node-api-acrs"  `
-        -adminConsentDescription "Allows the app to have the same access to information in the directory on behalf of the signed-in user."
+    $scopes = New-Object System.Collections.Generic.List[Microsoft.Graph.PowerShell.Models.MicrosoftGraphPermissionScope]
+    $scope = CreateScope -value access_as_user  `
+    -userConsentDisplayName "Access msal-node-api-acrs"  `
+    -userConsentDescription "Allow the application to access msal-node-api-acrs on your behalf."  `
+    -adminConsentDisplayName "Access msal-node-api-acrs"  `
+    -adminConsentDescription "Allows the app to have the same access to information in the directory on behalf of the signed-in user."
             
-        $scopes.Add($scope)
+    $scopes.Add($scope)
     
-    }
-     
     # add/update scopes
     Update-MgApplication -ApplicationId $serviceAadApplication.Id -Api @{Oauth2PermissionScopes = $scopes}
     Write-Host "Done creating the service application (msal-node-api-acrs)"
@@ -283,54 +256,54 @@ Function ConfigureApplications
     Update-MgApplication -ApplicationId $serviceAadApplication.Id -RequiredResourceAccess $requiredResourcesAccess
     Write-Host "Granted permissions."
 
-   # Create the client AAD application
+   # Create the spa AAD application
    Write-Host "Creating the AAD application (msal-react-spa-acrs)"
    
    # create the application 
-   $clientAadApplication = New-MgApplication -DisplayName "msal-react-spa-acrs" `
-                                                      -Spa `
-                                                      @{ `
-                                                          RedirectUris = "http://localhost:3000"; `
-                                                       } `
-                                                      -SignInAudience AzureADMyOrg `
-                                                      #-PublicClient $False
-    $tenantName = (Get-MgApplication -ApplicationId $clientAadApplication.Id).PublisherDomain
-    Update-MgApplication -ApplicationId $clientAadApplication.Id -IdentifierUris @("https://$tenantName/msal-react-spa-acrs")
+   $spaAadApplication = New-MgApplication -DisplayName "msal-react-spa-acrs" `
+                                                   -Spa `
+                                                   @{ `
+                                                       RedirectUris = "http://localhost:3000"; `
+                                                    } `
+                                                   -SignInAudience AzureADMyOrg `
+                                                   #end of command
+    $tenantName = (Get-MgApplication -ApplicationId $spaAadApplication.Id).PublisherDomain
+    Update-MgApplication -ApplicationId $spaAadApplication.Id -IdentifierUris @("https://$tenantName/msal-react-spa-acrs")
     
     # create the service principal of the newly created application 
-    $currentAppId = $clientAadApplication.AppId
-    $clientServicePrincipal = New-MgServicePrincipal -AppId $currentAppId -Tags {WindowsAzureActiveDirectoryIntegratedApp}
+    $currentAppId = $spaAadApplication.AppId
+    $spaServicePrincipal = New-MgServicePrincipal -AppId $currentAppId -Tags {WindowsAzureActiveDirectoryIntegratedApp}
 
     # add the user running the script as an app owner if needed
-    $owner = Get-MgApplicationOwner -ApplicationId $clientAadApplication.Id
+    $owner = Get-MgApplicationOwner -ApplicationId $spaAadApplication.Id
     if ($owner -eq $null)
     { 
-        New-MgApplicationOwnerByRef -ApplicationId $clientAadApplication.Id  -BodyParameter = @{"@odata.id" = "htps://graph.microsoft.com/v1.0/directoryObjects/$user.ObjectId"}
-        Write-Host "'$($user.UserPrincipalName)' added as an application owner to app '$($clientServicePrincipal.DisplayName)'"
+        New-MgApplicationOwnerByRef -ApplicationId $spaAadApplication.Id  -BodyParameter = @{"@odata.id" = "htps://graph.microsoft.com/v1.0/directoryObjects/$user.ObjectId"}
+        Write-Host "'$($user.UserPrincipalName)' added as an application owner to app '$($spaServicePrincipal.DisplayName)'"
     }
-    Write-Host "Done creating the client application (msal-react-spa-acrs)"
+    Write-Host "Done creating the spa application (msal-react-spa-acrs)"
 
     # URL of the AAD application in the Azure portal
-    # Future? $clientPortalUrl = "https://portal.azure.com/#@"+$tenantName+"/blade/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/Overview/appId/"+$clientAadApplication.AppId+"/objectId/"+$clientAadApplication.ObjectId+"/isMSAApp/"
-    $clientPortalUrl = "https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/CallAnAPI/appId/"+$clientAadApplication.AppId+"/objectId/"+$clientAadApplication.ObjectId+"/isMSAApp/"
-    Add-Content -Value "<tr><td>client</td><td>$currentAppId</td><td><a href='$clientPortalUrl'>msal-react-spa-acrs</a></td></tr>" -Path createdApps.html
+    # Future? $spaPortalUrl = "https://portal.azure.com/#@"+$tenantName+"/blade/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/Overview/appId/"+$spaAadApplication.AppId+"/objectId/"+$spaAadApplication.ObjectId+"/isMSAApp/"
+    $spaPortalUrl = "https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/CallAnAPI/appId/"+$spaAadApplication.AppId+"/objectId/"+$spaAadApplication.ObjectId+"/isMSAApp/"
+    Add-Content -Value "<tr><td>spa</td><td>$currentAppId</td><td><a href='$spaPortalUrl'>msal-react-spa-acrs</a></td></tr>" -Path createdApps.html
     $requiredResourcesAccess = New-Object System.Collections.Generic.List[Microsoft.Graph.PowerShell.Models.MicrosoftGraphRequiredResourceAccess]
 
     
-    # Add Required Resources Access (from 'client' to 'service')
-    Write-Host "Getting access from 'client' to 'service'"
+    # Add Required Resources Access (from 'spa' to 'service')
+    Write-Host "Getting access from 'spa' to 'service'"
     $requiredPermissions = GetRequiredPermissions -applicationDisplayName "msal-node-api-acrs" `
         -requiredDelegatedPermissions "access_as_user" `
     
 
     $requiredResourcesAccess.Add($requiredPermissions)
-    Update-MgApplication -ApplicationId $clientAadApplication.Id -RequiredResourceAccess $requiredResourcesAccess
+    Update-MgApplication -ApplicationId $spaAadApplication.Id -RequiredResourceAccess $requiredResourcesAccess
     Write-Host "Granted permissions."
 
     # Configure known client applications for service 
     Write-Host "Configure known client applications for the 'service'"
     $knowApplications = New-Object System.Collections.Generic.List[System.String]
-    $knowApplications.Add($clientAadApplication.AppId)
+    $knowApplications.Add($spaAadApplication.AppId)
     Update-MgApplication -ApplicationId $serviceAadApplication.Id -Api @{KnownClientApplications = $knowApplications}
     Write-Host "Configured."
     
@@ -342,9 +315,9 @@ Function ConfigureApplications
 
     ReplaceInTextFile -configFilePath $configFile -dictionary $dictionary
     
-    # Update config file for 'client'
+    # Update config file for 'spa'
     $configFile = $pwd.Path + "\..\SPA\src\authConfig.js"
-    $dictionary = @{ "Enter_the_Application_Id_Here" = $clientAadApplication.AppId;"Enter_the_Tenant_Info_Here" = $tenantId;"Enter_the_Web_Api_Scope_here" = ("api://"+$serviceAadApplication.AppId+"/access_as_user") };
+    $dictionary = @{ "Enter_the_Application_Id_Here" = $spaAadApplication.AppId;"Enter_the_Tenant_Info_Here" = $tenantId;"Enter_the_Web_Api_Scope_here" = ("api://"+$serviceAadApplication.AppId+"/access_as_user");"Enter_the_Redirect_Uri_Here" = $spaAadApplication.Spa.RedirectUris };
 
     Write-Host "Updating the sample code ($configFile)"
 
@@ -366,5 +339,20 @@ Function ConfigureApplications
     Add-Content -Value "</tbody></table></body></html>" -Path createdApps.html  
 }
 
+# Pre-requisites
+if ($null -eq (Get-Module -ListAvailable -Name "Microsoft.Graph.Applications")) {
+    Install-Module "Microsoft.Graph.Applications" -Scope CurrentUser 
+}
+
+Import-Module Microsoft.Graph.Applications
+
+Set-Content -Value "<html><body><table>" -Path createdApps.html
+Add-Content -Value "<thead><tr><th>Application</th><th>AppId</th><th>Url in the Azure portal</th></tr></thead><tbody>" -Path createdApps.html
+
+$ErrorActionPreference = "Stop"
+
 # Run interactively (will ask you for the tenant ID)
-ConfigureApplications -tenantId $TenantId
+ConfigureApplications -tenantId $tenantId -environment $azureEnvironmentName
+
+Write-Host "Disconnecting from tenant"
+Disconnect-MgGraph

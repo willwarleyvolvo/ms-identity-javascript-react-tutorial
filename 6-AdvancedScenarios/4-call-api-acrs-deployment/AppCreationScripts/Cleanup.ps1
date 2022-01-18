@@ -2,15 +2,9 @@
 param(    
     [Parameter(Mandatory=$False, HelpMessage='Tenant ID (This is a GUID which represents the "Directory ID" of the AzureAD tenant into which you want to create the apps')]
     [string] $tenantId,
-    [Parameter(Mandatory=$False, HelpMessage='Azure environment to use while running the script (it defaults to AzureCloud)')]
+    [Parameter(Mandatory=$False, HelpMessage='Azure environment to use while running the script. Default = Global')]
     [string] $azureEnvironmentName
 )
-
-if ($null -eq (Get-Module -ListAvailable -Name "Microsoft.Graph.Applications")) { 
-    Install-Module "Microsoft.Graph.Applications" -Scope CurrentUser                                            
-} 
-Import-Module Microsoft.Graph.Applications
-$ErrorActionPreference = "Stop"
 
 Function Cleanup
 {
@@ -29,7 +23,13 @@ Function Cleanup
 
     # Connect to the Microsoft Graph API
     Write-Host "Connecting Microsoft Graph"
-    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -Environment $azureEnvironmentName
+    if ($tenantId -eq "") {
+        Connect-MgGraph -Scopes "Application.ReadWrite.All" -Environment $azureEnvironmentName
+        $tenantId = (Get-MgContext).TenantId
+    }
+    else {
+        Connect-MgGraph -TenantId $tenantId -Scopes "Application.ReadWrite.All" -Environment $azureEnvironmentName
+    }
     
     # Removes the applications
     Write-Host "Cleaning-up applications from tenant '$tenantId'"
@@ -41,7 +41,7 @@ Function Cleanup
     }
     catch
     {
-	    Write-Host "Unable to remove the 'msal-node-api-acrs' . Try deleting manually." -ForegroundColor White -BackgroundColor Red
+	    Write-Host "Unable to remove the application 'msal-node-api-acrs' . Try deleting manually." -ForegroundColor White -BackgroundColor Red
     }
 
     Write-Host "Making sure there are no more (msal-node-api-acrs) applications found, will remove if needed..."
@@ -67,14 +67,14 @@ Function Cleanup
     {
 	    Write-Host "Unable to remove ServicePrincipal 'msal-node-api-acrs' . Try deleting manually from Enterprise applications." -ForegroundColor White -BackgroundColor Red
     }
-    Write-Host "Removing 'client' (msal-react-spa-acrs) if needed"
+    Write-Host "Removing 'spa' (msal-react-spa-acrs) if needed"
     try
     {
         Get-MgApplication -Filter "DisplayName eq 'msal-react-spa-acrs'"  | ForEach-Object {Remove-MgApplication -ApplicationId $_.Id }
     }
     catch
     {
-	    Write-Host "Unable to remove the 'msal-react-spa-acrs' . Try deleting manually." -ForegroundColor White -BackgroundColor Red
+	    Write-Host "Unable to remove the application 'msal-react-spa-acrs' . Try deleting manually." -ForegroundColor White -BackgroundColor Red
     }
 
     Write-Host "Making sure there are no more (msal-react-spa-acrs) applications found, will remove if needed..."
@@ -102,5 +102,15 @@ Function Cleanup
     }
 }
 
-Cleanup -tenantId $TenantId
+if ($null -eq (Get-Module -ListAvailable -Name "Microsoft.Graph.Applications")) { 
+    Install-Module "Microsoft.Graph.Applications" -Scope CurrentUser                                            
+} 
+Import-Module Microsoft.Graph.Applications
+$ErrorActionPreference = "Stop"
+
+
+Cleanup -tenantId $tenantId -environment $azureEnvironmentName
+
+Write-Host "Disconnecting from tenant"
+Disconnect-MgGraph
 

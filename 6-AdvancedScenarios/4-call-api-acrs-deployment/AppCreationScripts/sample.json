@@ -35,7 +35,7 @@
             ]
         },
         {
-            "Id": "client",
+            "Id": "spa",
             "Name": "msal-react-spa-acrs",
             "Kind": "SinglePageApplication",
             "Audience": "AzureADMyOrg",
@@ -72,13 +72,13 @@
             ]
         },
         {
-            "App": "client",
+            "App": "spa",
             "SettingKind": "Replace",
             "SettingFile": "\\..\\SPA\\src\\authConfig.js",
             "Mappings": [
                 {
                     "key": "Enter_the_Application_Id_Here",
-                    "value": "client.AppId"
+                    "value": ".AppId"
                 },
                 {
                     "key": "Enter_the_Tenant_Info_Here",
@@ -87,6 +87,10 @@
                 {
                     "key": "Enter_the_Web_Api_Scope_here",
                     "value": "service.Scope"
+                },
+                 {
+                    "key": "Enter_the_Redirect_Uri_Here",
+                    "value": "spa.Spa.RedirectUris"
                 }
             ]
         }
