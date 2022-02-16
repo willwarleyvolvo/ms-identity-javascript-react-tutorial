@@ -1,7 +1,7 @@
 import { BrowserAuthError } from "@azure/msal-browser";
 import { protectedResources } from "./authConfig";
 import { msalInstance } from "./index";
-import { helperMethod } from "./util/util";
+import { callAPI } from "./util/util";
 
 const getToken = async () => {
     const account = msalInstance.getActiveAccount();
@@ -23,6 +23,8 @@ const getToken = async () => {
  * If not present, then it simply returns the response as json
  * For more information, visit: https://docs.microsoft.com/en-us/azure/active-directory/develop/claims-challenge#claims-challenge-header-format
  * @param {Object} response: HTTP response
+ * @param {Object} options
+ * @param {id} string
  */
 const handleClaimsChallenge = async (response, options, id = "") => {
     if (response.status === 401) {
@@ -39,7 +41,7 @@ const handleClaimsChallenge = async (response, options, id = "") => {
                 });
 
                 if(accessToken){
-                    return helperMethod(options, id);
+                    return callAPI(options, id);
                 }
 
             } catch (error) {
@@ -53,7 +55,7 @@ const handleClaimsChallenge = async (response, options, id = "") => {
                     });
 
                     if(accessToken){
-                         return helperMethod(options, id);
+                         return callAPI(options, id);
                     }
                 }
             }

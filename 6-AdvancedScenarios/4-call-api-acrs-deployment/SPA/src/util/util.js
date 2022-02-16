@@ -1,6 +1,6 @@
 import { deleteTask, postTask, editTask } from '../fetch';
 
-export const helperMethod = (options, id) => {
+export const callAPI = (options, id) => {
     switch(options["method"]){
         case "POST":
             let task =  JSON.parse(options.body);

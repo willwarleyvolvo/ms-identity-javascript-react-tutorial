@@ -21,7 +21,7 @@ exports.postDetailsPage = async(req, res, next) => {
             nanoid(),
             req.session.account.idTokenClaims.tid, 
             req.body.authContext.split(' ')[0], // id
-            req.body.authContext.split(' ')[1], // displayName
+            req.body.authContext.replace(req.body.authContext.split(' ')[0],' '), // displayName
             req.body.operation
         );
 
@@ -49,6 +49,7 @@ exports.getDashboardPage = (req, res, next) => {
 exports.postDashboardPage = async(req, res, next) => {
     try {
         // pass the access token to create a graph client
+        console.log(req.session, " seesion")
         const graphClient = msGraph.getAuthenticatedClient(req.session.remoteResources["msGraphAcrs"].accessToken);
 
         let acrs = await graphClient
