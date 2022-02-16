@@ -22,6 +22,7 @@ export const NavigationBar = () => {
     }
 
     const handleLogout = () => {
+        sessionStorage.setItem('loggedOut', true)
         instance.logoutPopup({ 
             postLogoutRedirectUri: "/",
             mainWindowRedirectUri: "/" 

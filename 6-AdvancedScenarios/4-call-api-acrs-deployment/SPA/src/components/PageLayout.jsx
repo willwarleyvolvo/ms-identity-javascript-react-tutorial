@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AuthenticatedTemplate, useMsalAuthentication, useMsal, useIsAuthenticated } from "@azure/msal-react";
-import { InteractionType, InteractionRequiredAuthError} from '@azure/msal-browser';
+import { InteractionType } from '@azure/msal-browser';
 import { NavigationBar } from "./NavigationBar";
 import { loginRequest } from "../authConfig";
 
@@ -8,7 +8,7 @@ export const PageLayout = (props) => {
     
     const { login, error } = useMsalAuthentication(InteractionType.Silent, loginRequest);
      useEffect(() => {
-        if(error && error.errorCode.includes('silent_sso_error')){
+        if(error && error.errorCode.includes('silent_sso_error') && !window.sessionStorage.getItem('loggedOut') ){
             login(InteractionType.Popup, loginRequest)
                 .catch((err) => console.log(err))
         }
