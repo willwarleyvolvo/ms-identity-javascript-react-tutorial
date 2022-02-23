@@ -1,19 +1,29 @@
 import { BrowserAuthError } from "@azure/msal-browser";
 import { protectedResources } from "./authConfig";
 import { msalInstance } from "./index";
-import { callAPI } from "./util/util";
+import { callAPI, addClaimsToStorage } from "./util/util";
 
 const getToken = async () => {
     const account = msalInstance.getActiveAccount();
+    let response;
     if (!account) {
         throw Error("No active account! Verify a user has been signed in and setActiveAccount has been called.");
     }
 
-    const response = await msalInstance.acquireTokenSilent({
-        account: account,
-        scopes: protectedResources.apiTodoList.scopes
-    });
+    if(localStorage.getItem("currentClaim")){        
+        let claimsChallenge = window.atob(localStorage.getItem("currentClaim"));
+         response = await msalInstance.acquireTokenSilent({
+                account: account,
+                scopes: protectedResources.apiTodoList.scopes,
+                claims: claimsChallenge
+        });
+    }else {
 
+         response = await msalInstance.acquireTokenSilent({
+                account: account,
+                scopes: protectedResources.apiTodoList.scopes
+        });
+    }
     return response.accessToken;
 }
 
@@ -32,13 +42,15 @@ const handleClaimsChallenge = async (response, options, id = "") => {
             let accessToken;
             const authenticateHeader = response.headers.get("www-authenticate");
             const claimsChallenge = authenticateHeader.split(" ")
-                .find(entry => entry.includes("claims=")).split('claims="')[1].split('",')[0];
-            
+                .find(entry => entry.includes("claims=")).split('claims="')[1].split('",')[0]; 
             try {
                 accessToken = await msalInstance.acquireTokenPopup({
                     claims: window.atob(claimsChallenge), // decode the base64 string
                     scopes: protectedResources.apiTodoList.scopes
                 });
+                
+                addClaimsToStorage(claimsChallenge)
+                
 
                 if(accessToken){
                     return callAPI(options, id);
@@ -53,6 +65,9 @@ const handleClaimsChallenge = async (response, options, id = "") => {
                         claims: window.atob(claimsChallenge),
                         scopes: protectedResources.apiTodoList.scopes
                     });
+
+                    addClaimsToStorage(claimsChallenge)
+
 
                     if(accessToken){
                          return callAPI(options, id);
@@ -104,7 +119,6 @@ export const getTask = async (id) => {
 
 export const postTask = async (task) => {
     const accessToken = await getToken();
-
     const headers = new Headers();
     const bearer = `Bearer ${accessToken}`;
 

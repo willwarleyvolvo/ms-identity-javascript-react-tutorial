@@ -16,3 +16,17 @@ export const callAPI = (options, id) => {
                     .then(res => res);
     }
 }
+
+
+export const addClaimsToStorage = (claims) => {
+
+     if(localStorage.getItem("currentClaim")){
+
+        localStorage.removeItem('currentClaim');
+        localStorage.setItem("currentClaim", claims);
+
+     }else {
+         
+        localStorage.setItem("currentClaim", claims);  
+     }
+}
