@@ -79,7 +79,6 @@ const bearerOptions = {
     scope: [process.env.API_REQUIRED_PERMISSION] // scope you set during app registration
 };
 
-// console.log(bearerOptions, " bearerOptions")
 
 const bearerStrategy = new BearerStrategy(bearerOptions, (token, done) => {
     // Send user info using the second argument
@@ -120,7 +119,6 @@ const appSettings = {
     }
 }
 
-// console.log(appSettings, " appSettings")
 
 // instantiate the wrapper
 const authProvider = new msalWrapper.AuthProvider(appSettings);

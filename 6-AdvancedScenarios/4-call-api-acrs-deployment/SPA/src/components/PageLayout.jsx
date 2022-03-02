@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AuthenticatedTemplate, useMsalAuthentication, useMsal, useIsAuthenticated } from "@azure/msal-react";
-import { InteractionType, InteractionRequiredAuthError } from '@azure/msal-browser';
+import { InteractionType, InteractionRequiredAuthError, BrowserAuthError } from '@azure/msal-browser';
 import { NavigationBar } from "./NavigationBar";
 import { loginRequest } from "../authConfig";
 
@@ -9,9 +9,14 @@ export const PageLayout = (props) => {
     const { login, error } = useMsalAuthentication(InteractionType.Silent, loginRequest);
 
      useEffect(() => {
-        if(error && error instanceof InteractionRequiredAuthError && !error.errorMessage.includes('AADSTS50058')){
+        if(error && error instanceof InteractionRequiredAuthError){
             login(InteractionType.Popup, loginRequest)
-                .catch((err) => console.log(err))
+                .catch((err) => {
+                     if(err instanceof BrowserAuthError && 
+                     (err.errorCode === "popup_window_error" || err.errorCode === "empty_window_error")){
+                        login(InteractionType.Redirect, loginRequest)
+                    }
+                })
         }
         
     }, [error]);

@@ -49,7 +49,6 @@ exports.getDashboardPage = (req, res, next) => {
 exports.postDashboardPage = async(req, res, next) => {
     try {
         // pass the access token to create a graph client
-        console.log(req.session, " seesion")
         const graphClient = msGraph.getAuthenticatedClient(req.session.remoteResources["msGraphAcrs"].accessToken);
 
         let acrs = await graphClient
