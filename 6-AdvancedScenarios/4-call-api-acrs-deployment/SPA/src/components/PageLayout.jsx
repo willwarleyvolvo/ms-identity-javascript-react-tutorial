@@ -7,8 +7,8 @@ import { loginRequest } from "../authConfig";
 export const PageLayout = (props) => {
     
     const { login, error } = useMsalAuthentication(InteractionType.Silent, loginRequest);
-
      useEffect(() => {
+        localStorage.removeItem('currentClaim');
         if(error && error instanceof InteractionRequiredAuthError){
             login(InteractionType.Popup, loginRequest)
                 .catch((err) => {

@@ -5,6 +5,7 @@ import { callAPI, addClaimsToStorage } from "./util/util";
 
 const getToken = async () => {
     const account = msalInstance.getActiveAccount();
+    
     let response;
     if (!account) {
         throw Error("No active account! Verify a user has been signed in and setActiveAccount has been called.");
@@ -24,6 +25,7 @@ const getToken = async () => {
                 scopes: protectedResources.apiTodoList.scopes
         });
     }
+    console.error(response.accessToken);
     return response.accessToken;
 }
 
