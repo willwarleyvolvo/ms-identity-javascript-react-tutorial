@@ -20,7 +20,7 @@ export const NavigationBar = () => {
     return (
         <>
             <Navbar bg="primary" variant="dark">
-                <a className="navbar-brand" href="/">Microsoft identity platform</a>
+                <a className="navbar-brand" href="/">VolvoCars</a>
                 <AuthenticatedTemplate>
                     <Nav.Link as={Button} href="/profile">Profile</Nav.Link>
                     <Nav.Link as={Button} href="/function">FunctionAPI</Nav.Link>
